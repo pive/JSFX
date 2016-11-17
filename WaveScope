@@ -1,0 +1,150 @@
+desc:WaveDisplay1
+options:no_meter
+
+@init
+
+ext_noinit = 1;
+// -- gfx ---------------------
+R = 20; G = 20; B = 20;
+gfx_clear = R+G*256+B*65536;
+
+// == Init Waveform ====================================== //
+function wave.init(x,y,w,h, mem_offs) 
+(
+  this.x = x; this.y = y;
+  this.w = w; this.h = h;
+  this.buf = mem_offs;     // peaks buf offs, must NOT cross other used mem slots!
+  this.Vzoom = 1;          // vertical zoom 
+  this.div = 200;          // divfactor(smpls in peak)
+  this.min_div = 10;//400; // divfactor min
+  this.max_div = 2000;     // divfactor max
+);
+
+// == Build Waveform ==================================== //
+function wave.build(input)
+  instance(buf, min_peak,max_peak, div, w, spos, ppos)   
+  local(buf_sz)
+(
+  min_peak = min(min_peak, input);   // min peak
+  max_peak = max(max_peak, input);   // max peak
+  
+  // -- Save peaks - 0=min_peak, 1=max_peak ; etc
+  spos >= div ? (
+    // clear buf, reset peak pos ----
+    buf_sz = w*2;
+    ppos>=buf_sz ? ( 
+      memset(buf, 0, buf_sz); // clear peak buf 
+      ppos = 0;  // reset peak pos cnt
+    );  
+    
+    // save values to buf -------
+    buf[ppos]   = min_peak; // min 
+    buf[ppos+1] = max_peak; // max
+    ppos+=2;
+    // reset min-max values -----
+    min_peak = 10; max_peak = -10; // reset min-max peaks(v1-draw) 
+    //min_peak = max_peak = 0;     // reset min-max peaks(v2-draw)
+    //---------------------------
+    spos = 0;        // reset smpl pos cnt
+    wave.redraw = 1; // need redraw wave
+  );
+  
+  //-----------------------------
+  spos+=1; // upd smpl pos counter
+
+);
+
+// == Draw Waveform ===================================== //
+function wave.draw_waveform()
+  instance(x,y,w,h, buf, Vzoom, div, min_div, max_div)
+  local(sx, hlf_h, axis, p, min_peak, max_peak, last_min_peak,last_max_peak) 
+( 
+  //-- Draw bg, cnt --------
+  gfx_set(0.04,0.04,0.04,1);
+  gfx_rect(x-1,y,w+2,h+1,1);
+  gfx_set(0.2,0.2,0.2,1);
+  gfx_rect(x-1,y,w+2,h+1,0); 
+  
+  // -- draw wave ----------
+  hlf_h = h/2;
+  axis = y+hlf_h;
+  sx = x; // start draw x-pos
+  p = 0;  // peak cnt
+  last_min_peak = last_max_peak = 0;
+  loop(w, 
+    // -- wave peaks -------
+    min_peak = hlf_h * buf[p] * Vzoom;
+    max_peak = hlf_h * buf[p+1] * Vzoom;
+    min_peak = min( max(min_peak, -hlf_h), hlf_h); // verify range
+    max_peak = min( max(max_peak, -hlf_h), hlf_h); // verify range
+    gfx_set(0.6,0.6,0.6,0.5);
+    gfx_line(sx, axis-min_peak, sx, axis-max_peak);
+
+    // -- wave contour -----
+    gfx_set(0.6,0.6,0.6,0.8);
+    gfx_line(sx-1, axis-last_min_peak, sx, axis-min_peak, 1);
+    gfx_line(sx-1, axis-last_max_peak, sx, axis-max_peak, 1); 
+    last_min_peak = min_peak;
+    last_max_peak = max_peak;
+    
+    //----------------------
+    p+=2;   // upd peak cnt
+    sx+=1;  // upd sx cnt
+  );
+
+  //-- Zoom ----------------------------
+  // можно исп. общ. функции, но пусть будет автономно. 
+  //-- Horisontal --
+  ( mouse_x > x && mouse_x < x+w && 
+    mouse_y > y && mouse_y < y+h; ) ? (
+      ( mouse_wheel<0 ? div = min(max_div, ceil(div/=0.8) );
+        mouse_wheel>0 ? div = max(min_div, ceil(div*=0.8) );
+        mouse_wheel = 0; 
+      );
+  );
+  
+  //-- Vertical ----
+  ( mouse_ox > x && mouse_ox < x+w && 
+    mouse_oy > y && mouse_oy < y+h; ) ? (
+      (mouse_cap&1) ? ( // -- Vertical v1
+       mouse_last_y-mouse_y>0 ? Vzoom = min(10, Vzoom+=0.2 );
+       mouse_last_y-mouse_y<0 ? Vzoom = max(1,  Vzoom-=0.2 );
+       );
+  );
+     
+);
+
+
+//----------------------------------------------------------
+wave.init(20,20,700,300, 1000);
+
+@slider
+
+@block
+
+
+@sample
+input = (spl0+spl1)/2;
+wave.build(input);
+
+@gfx 900 460
+//test resize
+wave.w = gfx_w-wave.x-20;
+wave.h = gfx_h-wave.y-20;
+
+// -- Redraw Wave ----------------------
+wave.redraw ? (
+  wave.draw_waveform(); // draw
+  wave.redraw = 0;      // reset redraw state
+); 
+
+// -- Get mouse ------------------------
+mouse_cap&1 && !last_mouse_cap&1 ? (
+  mouse_ox = mouse_x; 
+  mouse_oy = mouse_y;
+);
+
+
+last_mouse_cap = mouse_cap;
+mouse_last_x = mouse_x;
+mouse_last_y = mouse_y;
