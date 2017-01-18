@@ -1,7 +1,6 @@
 desc:WaveScopeStereo v1-1-2(separate waves)
 options:no_meter
 
-import inc\Mouse3Full.jsfx-inc
 
 slider1:1<0.01,4,0.00001>-Range(in sec)
 slider2:0<0,4,1>-for mlt Hor Zoom
