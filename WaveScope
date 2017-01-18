@@ -382,6 +382,8 @@ wave.SamplesToBuffer(input1, input2);
 
 @gfx 960 580
 
+gfx_getchar(); // request mouse_cap to be set even when mouse button not down
+
 //***************************************************************
 //-- Upd coord  ----------------------------------
 function wave.Zoom()
@@ -456,4 +458,3 @@ GetMouseState();
 Draw();
 //***************************************************************
 SetMouseLastState();
-
