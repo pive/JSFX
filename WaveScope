@@ -1,150 +1,383 @@
-desc:WaveDisplay1
+desc:WaveScopeStereo v1-1-2(separate waves)
 options:no_meter
 
+import inc\Mouse3Full.jsfx-inc
+
+slider1:1<0.01,4,0.00001>-Range(in sec)
+slider2:0<0,4,1>-for mlt Hor Zoom
+slider3:1<1,10,0.01>-Vertical Zoom
+slider4:0<0,3,1{TimeLoop, MidiPitch, Tempo, Free} >-Sync Mode:
+slider5:0<0,1,1{1 axis,2 axis}>-View Mode:
+slider6:0<0,2,1{ 1 / 2 (Stereo), 1+2 / 3+4 (Multy) }>-Chan Mode:
+
+in_pin:IN1
+in_pin:IN2
+in_pin:IN3
+in_pin:IN4
+
 @init
+//**********************************************************
+ext_nodenorm = 1;
 
-ext_noinit = 1;
-// -- gfx ---------------------
-R = 20; G = 20; B = 20;
-gfx_clear = R+G*256+B*65536;
-
-// == Init Waveform ====================================== //
-function wave.init(x,y,w,h, mem_offs) 
+/***************************************************************************************************
+*** Waveform functions *****************************************************************************
+***************************************************************************************************/
+// == Init Wave ========================================= //
+function wave.init(x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2, sbuf) 
 (
-  this.x = x; this.y = y;
-  this.w = w; this.h = h;
-  this.buf = mem_offs;     // peaks buf offs, must NOT cross other used mem slots!
-  this.Vzoom = 1;          // vertical zoom 
-  this.div = 200;          // divfactor(smpls in peak)
-  this.min_div = 10;//400; // divfactor min
-  this.max_div = 2000;     // divfactor max
+  this.x = x; this.y = y; this.w = w; this.h = h; // coord 
+  this.r1 = r1; this.g1 = g1; this.b1 = b1; this.a1 = a1; // ch1 color
+  this.r2 = r2; this.g2 = g2; this.b2 = b2; this.a2 = a2; // ch2 color
+  this.sbuf = sbuf; // samplebuffer memory offset, must NOT cross other used mem slots!
+  this.view_mode = 1; // view mode 0=on one axis, 1=on sep axis
+  this.Vzoom = 1;     // vertical zoom 
+  this.div = 200;     // divfactor(smpls in peak)
 );
 
-// == Build Waveform ==================================== //
-function wave.build(input)
-  instance(buf, min_peak,max_peak, div, w, spos, ppos)   
-  local(buf_sz)
+// == Input samples to sbuf(sample buffer) ============== //
+function wave.SamplesToBuffer(input1, input2)
+  instance(sbuf, sbuf_sz, spos)   
 (
-  min_peak = min(min_peak, input);   // min peak
-  max_peak = max(max_peak, input);   // max peak
-  
-  // -- Save peaks - 0=min_peak, 1=max_peak ; etc
-  spos >= div ? (
-    // clear buf, reset peak pos ----
-    buf_sz = w*2;
-    ppos>=buf_sz ? ( 
-      memset(buf, 0, buf_sz); // clear peak buf 
-      ppos = 0;  // reset peak pos cnt
-    );  
-    
-    // save values to buf -------
-    buf[ppos]   = min_peak; // min 
-    buf[ppos+1] = max_peak; // max
-    ppos+=2;
-    // reset min-max values -----
-    min_peak = 10; max_peak = -10; // reset min-max peaks(v1-draw) 
-    //min_peak = max_peak = 0;     // reset min-max peaks(v2-draw)
-    //---------------------------
-    spos = 0;        // reset smpl pos cnt
-    wave.redraw = 1; // need redraw wave
+  spos>=sbuf_sz ? (
+    //memset(sbuf,0,sbuf_sz); clear sbuf(if need) 
+    spos=0;
   );
   
-  //-----------------------------
-  spos+=1; // upd smpl pos counter
+  sbuf[spos]   = input1;
+  sbuf[spos+1] = input2;
+  //------------------------------------
+  spos+=2; // upd smpl pos counter
 
 );
-
-// == Draw Waveform ===================================== //
+// == Draw Wave ========================================= //
 function wave.draw_waveform()
-  instance(x,y,w,h, buf, Vzoom, div, min_div, max_div)
-  local(sx, hlf_h, axis, p, min_peak, max_peak, last_min_peak,last_max_peak) 
+  instance(x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2, sbuf, view_mode, Vzoom, div)
+  local(hlf_h, axis, axis1, axis2, peak_x, s, next_peak,
+    cur_spl1, min_peak1, max_peak1, last_min_peak1, last_max_peak1,
+    cur_spl2, min_peak2, max_peak2, last_min_peak2, last_max_peak2) 
 ( 
-  //-- Draw bg, cnt --------
-  gfx_set(0.04,0.04,0.04,1);
-  gfx_rect(x-1,y,w+2,h+1,1);
-  gfx_set(0.2,0.2,0.2,1);
-  gfx_rect(x-1,y,w+2,h+1,0); 
   
-  // -- draw wave ----------
+  // -- center axis --------
   hlf_h = h/2;
-  axis = y+hlf_h;
-  sx = x; // start draw x-pos
-  p = 0;  // peak cnt
-  last_min_peak = last_max_peak = 0;
-  loop(w, 
-    // -- wave peaks -------
-    min_peak = hlf_h * buf[p] * Vzoom;
-    max_peak = hlf_h * buf[p+1] * Vzoom;
-    min_peak = min( max(min_peak, -hlf_h), hlf_h); // verify range
-    max_peak = min( max(max_peak, -hlf_h), hlf_h); // verify range
-    gfx_set(0.6,0.6,0.6,0.5);
-    gfx_line(sx, axis-min_peak, sx, axis-max_peak);
-
-    // -- wave contour -----
-    gfx_set(0.6,0.6,0.6,0.8);
-    gfx_line(sx-1, axis-last_min_peak, sx, axis-min_peak, 1);
-    gfx_line(sx-1, axis-last_max_peak, sx, axis-max_peak, 1); 
-    last_min_peak = min_peak;
-    last_max_peak = max_peak;
-    
-    //----------------------
-    p+=2;   // upd peak cnt
-    sx+=1;  // upd sx cnt
-  );
-
-  //-- Zoom ----------------------------
-  // можно исп. общ. функции, но пусть будет автономно. 
-  //-- Horisontal --
-  ( mouse_x > x && mouse_x < x+w && 
-    mouse_y > y && mouse_y < y+h; ) ? (
-      ( mouse_wheel<0 ? div = min(max_div, ceil(div/=0.8) );
-        mouse_wheel>0 ? div = max(min_div, ceil(div*=0.8) );
-        mouse_wheel = 0; 
-      );
-  );
+  axis  = y + hlf_h;
+  gfx_set(0.6,0.8,0.6,0.2);
+  gfx_line(x, axis, w, axis);
   
-  //-- Vertical ----
-  ( mouse_ox > x && mouse_ox < x+w && 
-    mouse_oy > y && mouse_oy < y+h; ) ? (
-      (mouse_cap&1) ? ( // -- Vertical v1
-       mouse_last_y-mouse_y>0 ? Vzoom = min(10, Vzoom+=0.2 );
-       mouse_last_y-mouse_y<0 ? Vzoom = max(1,  Vzoom-=0.2 );
-       );
+  // -- dependent on the view_mode values --------
+  view_mode = ViewMode.val ? (    // if view_mode = 1;
+    axis1 = hlf_h - hlf_h/2;
+    axis2 = hlf_h + hlf_h/2;
+    hlf_h = hlf_h/2;
+  ) : (            // if view_mode = 0;
+    axis1 = axis2 = axis; 
   );
      
+  //-- Get samples from sbuf, create peaks, draw waves -----
+  peak_x = x; // first peak x-pos
+  s = 0;      // sample cnt
+  last_min_peak1 = last_max_peak1 = 0; // можно еще связать крайние точки
+  last_min_peak2 = last_max_peak2 = 0; // можно еще связать крайние точки
+  
+  loop(w,
+      // -- reset min-max peaks(v1-draw) ---------
+      div > 1 ? (
+        min_peak1 = min_peak2 = 10; max_peak1 = max_peak2 = -10; 
+      ) : ( // if divfactor < 1 (less than one sample on one peak) 
+        min_peak1 = min_peak2 = 0; max_peak1 = max_peak2 = 0;
+      );
+      
+      // -- Create peaks from buffer samples -----
+      next_peak = floor((peak_x+1) * div * 2 ); 
+      while(s <= next_peak) (
+        cur_spl1 = sbuf[s];    // ch1 spl
+        cur_spl2 = sbuf[s+1];  // ch2 spl
+        min_peak1 = min(min_peak1, cur_spl1);   // min peak1
+        max_peak1 = max(max_peak1, cur_spl1);   // max peak1
+        min_peak2 = min(min_peak2, cur_spl2);   // min peak2
+        max_peak2 = max(max_peak2, cur_spl2);   // max peak2      
+        s+=2; // upd cnt
+      );
+    
+        // -- 1-channel
+        min_peak1 = hlf_h * min_peak1 * Vzoom;
+        max_peak1 = hlf_h * max_peak1 * Vzoom;
+        min_peak1 = min( max(min_peak1, -hlf_h), hlf_h); // verify range
+        max_peak1 = min( max(max_peak1, -hlf_h), hlf_h); // verify range
+        // -- 2-channel
+        min_peak2 = hlf_h * min_peak2 * Vzoom;
+        max_peak2 = hlf_h * max_peak2 * Vzoom;
+        min_peak2 = min( max(min_peak2, -hlf_h), hlf_h); // verify range
+        max_peak2 = min( max(max_peak2, -hlf_h), hlf_h); // verify range    
+      
+      // -- Draw waveforms -----------------------
+      gfx_set(r1, g1, b1, a1); //-- 1 peak line --
+      gfx_line(peak_x, axis1-min_peak1, peak_x, axis1-max_peak1); // 1
+      gfx_a += 0.3;            //-- 1 contour ----
+      gfx_line(peak_x-1, axis1-last_min_peak1, peak_x, axis1-min_peak1, 1); // 1
+      gfx_line(peak_x-1, axis1-last_max_peak1, peak_x, axis1-max_peak1, 1); // 1
+      
+      gfx_set(r2, g2, b2, a2); //-- 2 peak line --
+      gfx_line(peak_x, axis2-min_peak2, peak_x, axis2-max_peak2); // 2
+      gfx_a += 0.3;            //-- 2 contour ----
+      gfx_line(peak_x-1, axis2-last_min_peak2, peak_x, axis2-min_peak2, 1); // 2
+      gfx_line(peak_x-1, axis2-last_max_peak2, peak_x, axis2-max_peak2, 1); // 2    
+    
+      // -- store last peaks ---
+      last_min_peak1 = min_peak1;
+      last_max_peak1 = max_peak1;
+      last_min_peak2 = min_peak2;
+      last_max_peak2 = max_peak2;
+  
+      // -----------------------
+      peak_x+=1; // to next x
+  );
+
+  //-- Draw frame ---------- 
+  gfx_set(0.2,0.2,0.2,1);
+  //gfx_rect(x-1,y,w+2,h+1,0);
+  //gfx_rect(x,y,w+1,h+1,0);
+  //gfx_rect(x-1,y-1,w+1,h+3,0);
+  
 );
 
 
-//----------------------------------------------------------
-wave.init(20,20,700,300, 1000);
+
+/***************************************************************************************************
+*** Other functions ********************************************************************************
+***************************************************************************************************/
+// For info, debug etc(flag < 0 = string, flag >= 0 = number, ndigits)
+// If x,y = 0 - draw in current position 
+function ShowMsg(x,y, msg, flag)
+(  
+  gfx_r = gfx_g = gfx_b = gfx_a = 0.9;
+  x && y ? (gfx_x = x; gfx_y = y; );
+  //gfx_set(0.7, 0.7, 0.7, 1);
+  gfx_set(0.6, 0.8, 0.6, 1);
+  gfx_setfont(1,"Arial", 14);
+  flag >= 0 ? gfx_drawnumber(msg, flag) : gfx_drawstr(msg);
+);
+
+// == For TimeLoop Mode ================================= //
+function LoopMode.GetRange()
+  local(play_step)
+  instance(last_play_pos, last_samplesblock, range_sec)
+(
+  play_step = play_position - last_play_pos;
+  play_state && play_step < 0 ? (
+   //range_start = play_position;
+   //range_end = last_play_pos + last_samplesblock/srate;
+   range_sec = -play_step + last_samplesblock/srate;
+  );
+  last_play_pos = play_position;
+  last_samplesblock = samplesblock;
+  range_sec; // ret range
+);
+
+// == For Midi Mode ===================================== //
+function MidiMode.GetRange()
+  local(offset,msg1,msg2,msg3)
+  instance(range_sec, note, freq)
+(
+  while (midirecv(offset,msg1,msg2,msg3)) (
+     (msg1&240)==$x90 && msg3!=0 ? (
+       note = msg2;
+       freq = (2^((note-69)/12)) * 440;   // v1
+       //freq = 2^(note/12+3.031);        // v2
+       //freq = (1.05946^msg2) * 8.17742; // v3
+       range_sec = 1/freq;
+     );
+     midisend(offset,msg1,msg2,msg3); // passthrough other events
+  );
+  range_sec; // ret range
+);
+
+
+//**************************************************************************************************
+//**************************************************************************************************
+// Very simple slider-linked button - only for label-sliders buttons! 
+function btn_New(x,y,w,h, r,g,b,a, lbl, sldr_idx, val, maxval)
+(
+  this.x = x; this.y = y; this.w = w; this.h = h; // coord
+  this.r = r; this.g = g; this.b = b; this.a = a; // color
+  this.lbl = lbl;
+  this.sldr_idx = sldr_idx;
+  this.val = val;
+  this.minval = minval; 
+  this.maxval = maxval;
+);
+//-----------------
+function btn_Draw()
+  instance(x,y,w,h, r,g,b,a, lbl, sldr_idx, val, maxval)
+  local(offs)
+(  
+  // --- get-set value -------
+  this.mouseClick() ? (
+    val < maxval ? slider(sldr_idx)+=1 : slider(sldr_idx) = 0;
+    val =  slider(sldr_idx);
+    slider_automate(2 ^ (sldr_idx-1));
+  );
+  //val != slider(sldr_idx) ? val = slider(sldr_idx);
+  // --- draw ----------------
+  gfx_set(r,g,b,a);
+  gfx_rect(x,y,w,h,0);
+  offs = h - gfx_texth;
+  gfx_a = 1;  
+  gfx_x = x + offs; gfx_y = y + offs/2;
+  gfx_drawstr(lbl);
+  gfx_drawstr( strcpy_fromslider( #, slider(sldr_idx) ) );
+
+);
+
+
+
+//*******************************************************************************
+//*******************************************************************************
+// function args = (x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2, sbuf) !!!
+wave.init(1,1,960,580, 0.6,0.3,0.3,0.3, 0.3,0.6,0.3,0.3, 0);
+
+//------------------------------------------------------------------------------
+// function args = (x,y,w,h, r,g,b,a, lbl, sldr_idx, val, maxval)
+SyncMode.btn_New( 10,10,140,20, 0.6,0.8,0.6,0.4, "Sync Mode: ",    4, 0, 3);
+ViewMode.btn_New(160,10,120,20, 0.6,0.8,0.6,0.4, "View Mode: ",    5, 0, 1);
+ChanMode.btn_New(210,10,180,20, 0.6,0.8,0.6,0.4, "Channel Mode: ", 6, 0, 1);
+
 
 @slider
+range_sec = slider1;
+wave.Vzoom = slider3;
+SyncMode.val = slider4;
+ViewMode.val = slider5;
+ChanMode.val = slider6;
+
+
 
 @block
 
+// TimeLoop Mode ---------------------------------
+SyncMode.val == 0 ? (
+  range_sec = LoopMode.GetRange();  
+  while(range_sec > 4.001) ( range_sec*=0.5 ); // 4.001
 
-@sample
-input = (spl0+spl1)/2;
-wave.build(input);
+);
 
-@gfx 900 460
-//test resize
-wave.w = gfx_w-wave.x-20;
-wave.h = gfx_h-wave.y-20;
+// Midi Pitch Mode -------------------------------
+SyncMode.val == 1 ? (
+  range_sec = MidiMode.GetRange();
+  range_sec *= 2^(slider2); // multiply
+);
 
-// -- Redraw Wave ----------------------
-wave.redraw ? (
-  wave.draw_waveform(); // draw
-  wave.redraw = 0;      // reset redraw state
-); 
+// Test tempo-sync - range -----------------------
+SyncMode.val == 2 ? (
+  range_sec = 60/tempo * 2^(slider2);
+  while(range_sec > 4.001) ( range_sec*=0.5 ); // 4.001
+);
 
-// -- Get mouse ------------------------
-mouse_cap&1 && !last_mouse_cap&1 ? (
-  mouse_ox = mouse_x; 
-  mouse_oy = mouse_y;
+// Free mode -------------------------------------
+SyncMode.val == 3 ? (
+    range_sec = slider1;
 );
 
 
-last_mouse_cap = mouse_cap;
-mouse_last_x = mouse_x;
-mouse_last_y = mouse_y;
+//-- Verify Range --------------------------------
+range_sec <= 0 ? range_sec = 1;
+slider1 = range_sec; // range_sec to slider
+range_spls = floor(range_sec * srate + 0.5); // Range to samples
+SyncMode.val == 1 ? while(range_spls*0.5<wave.w) ( range_spls*=2 );  // Только для миди?
+
+
+//-- Update Wave values(divfactor and sbuffer size) ---------
+wave.div = range_spls/wave.w; // division factor
+wave.sbuf_sz = range_spls*2;  // wave samplebuffer size(1-2 channels)
+
+@sample
+ChanMode.val ? ( 
+  // 1+2 / 3+4
+  input1 = (spl0 + spl1) * 0.5;
+  input2 = (spl2 + spl3) * 0.5;
+) : (
+  // 1 / 2
+  input1 = spl0;
+  input2 = spl1;
+);  
+
+// 1 + 2 - Mono
+// input1 = input2 = (spl0 + spl1) * 0.5; // не используется
+
+wave.SamplesToBuffer(input1, input2);
+
+@gfx 960 580
+
+//***************************************************************
+//-- Upd coord  ----------------------------------
+function wave.Zoom()
+  local(K)
+(
+  //-- H Zoom -----------------------
+  mouse_wheel ? (
+    // MIDI,Tempo Sync Mode ---
+    SyncMode.val == 1 || SyncMode.val == 2 ? (
+      slider2 -= sign(mouse_wheel);
+      slider2 = max(min(slider2,6),0);
+    );
+    // Free mode ---------
+    SyncMode.val == 3 ? (
+      mouse_cap&4 ? K = 1.01 : K = 1.1;
+      mouse_wheel<0 ? slider1 *= K;
+      mouse_wheel>0 ? slider1 /= K;
+      slider1 = max(min(slider1,4),0.001);
+    );
+  );  
+  
+  //-- V Zoom -----------------------
+  wave.mouseDown() ? (
+    wave.isCaptd = 1;
+    wave.cap_x = mouse_x;
+    wave.cap_y = mouse_y;
+    wave.Vzoom.cap_val = wave.Vzoom;
+  );
+  //------
+  mouse_up ? wave.isCaptd = 0;
+  //------
+  wave.isCaptd ? (
+    wave.Vzoom = wave.Vzoom.cap_val + (mouse_down_y-mouse_y)/150;
+    wave.Vzoom = min(max(wave.Vzoom,1),10 );
+    slider3 = wave.Vzoom;
+  );
+
+);
+
+
+function UpdateCoord()
+(  
+  wave.w = gfx_w-wave.x-1;
+  wave.h = gfx_h-wave.y-1;
+  
+  gfx_setfont(1,"Arial", 15);
+  
+  SyncMode.x = wave.w - SyncMode.w - 4;     // upd sync x
+  ViewMode.x = SyncMode.x - ViewMode.w - 4; // upd view x
+  ChanMode.x = ViewMode.x - ChanMode.w - 4; // upd chan x
+  
+  SyncMode.y = ViewMode.y = ChanMode.y = wave.y + 4;     // upd y  
+  
+  ShowMsg(wave.x + 4, wave.y + 4, range_spls, 0);
+  ShowMsg(0,0, " spl", -1);
+);
+
+//-- Draw -------------------------
+function Draw()
+( 
+  UpdateCoord();
+  wave.Zoom();
+  SyncMode.btn_Draw();
+  ViewMode.btn_Draw();
+  ChanMode.btn_Draw();
+  wave.draw_waveform();
+);
+
+
+GetMouseState();
+//***************************************************************
+Draw();
+//***************************************************************
+SetMouseLastState();
