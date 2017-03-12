@@ -1,8 +1,9 @@
-desc:WaveScopeStereo v1-1-2
+desc:WaveScopeStereo v1-3(separate waves)
 options:no_meter
 
+import inc\Mouse3Full.jsfx-inc
 
-slider1:1<0.01,4,0.00001>-Range(in sec)
+slider1:1<0.01,12,0.00001>-Range(in sec)
 slider2:0<0,4,1>-for mlt Hor Zoom
 slider3:1<1,10,0.01>-Vertical Zoom
 slider4:0<0,3,1{TimeLoop, MidiPitch, Tempo, Free} >-Sync Mode:
@@ -16,83 +17,39 @@ in_pin:IN4
 
 @init
 
+//**************************************************************************************************
 ext_nodenorm = 1;
+//----------------------------
+/*Range не должен быть слишком большим - оптимально около 4 секунд.
+Чем больше - тем больше нагрузка на процессор в этой версии, если это важно.
+В следующих не будет иметь значения вообще(мы над этим работаем:)), но времени мало.
+Но запас в слайдере оставлен специльно(нужен лично мне).*/
+// incr. max. range - more CPU usage! This will be fixed in future versions)
+max_range_sec = 12;
+// coords and colors -- change if need
+//x=40; y=10; w=960; h=580; // for scale
+x=40; y=10; w=960; h=580; // witchout scale
+r1=0.6; g1=0.3; b1=0.3; a1=0.2;
+r2=0.3; g2=0.6; b2=0.3; a2=0.2; 
 
-//-- Get current mouse state -----------------------------------------
-function GetMouseState()
+/***************************************************************************************************
+*** DB2VAL - VAL2DB(from sdk, work faster, then 10^ and log10) *************************************
+***************************************************************************************************/
+function DB2VAL(x)
 (
-  //-- Mouse btn has been pressed(anywhere) ------
-  mouse_down  = (mouse_cap&1)  && !(mouse_last_cap&1);  // L mouse
-  mouse_rdown = (mouse_cap&2)  && !(mouse_last_cap&2);  // R mouse
-  mouse_mdown = (mouse_cap&64) && !(mouse_last_cap&64); // M mouse
-  //-- Mouse btn has been released(anywhere) -----
-  mouse_up  = (mouse_last_cap&1)  && !(mouse_cap&1);    // L mouse
-  mouse_rup = (mouse_last_cap&2)  && !(mouse_cap&2);    // R mouse
-  mouse_mup = (mouse_last_cap&64) && !(mouse_cap&64);   // M mouse
-  //-- Mouse moved(anywhere) ---------------------
-  mouse_move = (mouse_last_x != mouse_x) || (mouse_last_y != mouse_y);
-  //-- Mouse dbl(used for mouseDblClick) ---------
-  mouse_down ? (
-    mouse_dbl = (mouse_down_x==mouse_x) && (mouse_down_y==mouse_y) && (mouse_captimer<12);
-    mouse_captimer = 0;
+  exp((x)*0.11512925464970228420089957273422);
+);
+//----------------------------
+function VAL2DB(x)
+  local(v)
+(
+  x < 0.0000000298023223876953125 ? (
+    -150; 
+  ) : (
+    v = log(x)*8.6858896380650365530225783783321;
+    v < -150 ? -150 : v;
   );
-  
-  //-- mouse press coordinates -------------------
-  mouse_down  ? (mouse_down_x  = mouse_x; mouse_down_y  = mouse_y; );
-  mouse_rdown ? (mouse_rdown_x = mouse_x; mouse_rdown_y = mouse_y; );
-  mouse_mdown ? (mouse_mdown_x = mouse_x; mouse_mdown_y = mouse_y; );
-  /* release coordinates, not used in this case --
-  mouse_up  ? (mouse_up_x  = mouse_x; mouse_up_y  = mouse_y; );
-  mouse_rup ? (mouse_rup_x = mouse_x; mouse_rup_y = mouse_y; );
-  mouse_mup ? (mouse_mup_x = mouse_x; mouse_mup_y = mouse_y; ); */
-  
-  //-- modkeys state -----------------------------
-  Ctrl  = mouse_cap&4;  // Ctrl
-  Shift = mouse_cap&8;  // Shift
-  Alt   = mouse_cap&16; // Alt
 );
-
-
-//-- Set(update) last state -------------------------------------------
-function SetMouseLastState()
-( 
-  mouse_last_cap = mouse_cap; // upd last_cap
-  mouse_last_x = mouse_x;     // upd last_x
-  mouse_last_y = mouse_y;     // upd last_y
-  mouse_wheel  = 0;           // reset mouse_wheel
-  mouse_hwheel = 0;           // reset mouse_hwheel
-  //--------------
-  mouse_captimer < 12 ? mouse_captimer+=1; // upd "timer"(frame cnt)
-  mouse_up ? mouse_dbl = 0;   // reset dbl when released 
-);
-
-
-
-
-//-- if point(p_x, p_y) in rect(x,y,w,h) area ----
-function pointINrect(p_x,p_y, x,y,w,h) ( p_x>=x && p_x<=x+w && p_y>=y && p_y<=y+h; );
-//-- if mouse cursor in rect(x,y,w,h) area -------
-function mouseINrect(x,y,w,h) ( pointINrect(mouse_x, mouse_y, x,y,w,h); );
-//-- if point(p_x, p_y) in object area -----------
-function pointIN(p_x,p_y) instance(x,y,w,h) ( this.pointINrect(p_x,p_y, x,y,w,h) );
-//-- if mouse cursor in object area --------------
-function mouseIN() ( this.pointIN(mouse_x, mouse_y); );
-
-
-//-- Left Mouse Button ---------------------------
-function mouseDown()    ( mouse_down     && this.mouseIN(); );
-function mouseUp()      ( mouse_up       && this.mouseIN(); );
-function mouseClick()   ( this.mouseUp() && this.pointIN(mouse_down_x, mouse_down_y); );
-function mouseDblClick() ( mouse_dbl && this.mouseClick(); );
-//-- Rigth Mouse Button --------------------------
-function mouseRDown()  ( mouse_rdown     && this.mouseIN(); );
-function mouseRUp()    ( mouse_rup       && this.mouseIN(); );
-function mouseRClick() ( this.mouseRUp() && this.pointIN(mouse_rdown_x, mouse_rdown_y); );
-//-- Middle Mouse Button -------------------------
-function mouseMDown()  ( mouse_mdown     && this.mouseIN(); );
-function mouseMUp()    ( mouse_mup       && this.mouseIN(); );
-function mouseMClick() ( this.mouseMUp() && this.pointIN(mouse_mdown_x, mouse_mdown_y); );
-
 
 /***************************************************************************************************
 *** Waveform functions *****************************************************************************
@@ -113,42 +70,86 @@ function wave.init(x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2, sbuf)
 function wave.SamplesToBuffer(input1, input2)
   instance(sbuf, sbuf_sz, spos)   
 (
-  spos>=sbuf_sz ? (
-    //memset(sbuf,0,sbuf_sz); clear sbuf(if need) 
-    spos=0;
+  !this.Pause ? (
+    spos>=sbuf_sz ? (
+      //memset(sbuf,0,sbuf_sz); clear sbuf(if need) 
+      spos=0;
+    );
+    
+    sbuf[spos]   = input1;
+    sbuf[spos+1] = input2;
+    //------------------------------------
+    spos+=2; // upd smpl pos counter
   );
-  
-  sbuf[spos]   = input1;
-  sbuf[spos+1] = input2;
-  //------------------------------------
-  spos+=2; // upd smpl pos counter
 
 );
+
+function wave.draw_db_scale(axis, hlf_h)
+  instance(x,y,w,h, Vzoom)
+  local(db, db_str, str_w, str_h, str_hlf_h, v )
+(
+  db = 0;
+  gfx_y = axis + hlf_h + gfx_texth;
+  gfx_set(0.5,0.5,0.5);
+  while(db > -150) (
+    db_str = sprintf(#, "%.2f", db);
+    gfx_measurestr(db_str, str_w, str_h);
+    v = DB2VAL(db) * Vzoom * hlf_h;
+    str_hlf_h = str_h/2; 
+    gfx_y - (axis - str_hlf_h + v + 4) > str_h && gfx_y > axis + str_h + 4 ? (
+      gfx_a = 0.9;
+      gfx_x = x - 5 - str_w;
+      gfx_y = axis - str_hlf_h - v;
+      gfx_drawstr(db_str);
+      gfx_x = x - 5 - str_w;
+      gfx_y = axis - str_hlf_h + v;
+      gfx_drawstr(db_str);
+      
+      gfx_a = 0.15;
+      gfx_line(x, axis + v, x+w, axis + v);
+      gfx_line(x, axis - v, x+w, axis - v);
+    );
+    
+    db-=3;  
+  );
+);
+
 // == Draw Wave ========================================= //
 function wave.draw_waveform()
   instance(x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2, sbuf, view_mode, Vzoom, div)
   local(hlf_h, axis, axis1, axis2, peak_x, s, next_peak,
     cur_spl1, min_peak1, max_peak1, last_min_peak1, last_max_peak1,
-    cur_spl2, min_peak2, max_peak2, last_min_peak2, last_max_peak2) 
+    cur_spl2, min_peak2, max_peak2, last_min_peak2, last_max_peak2,
+    chan, mouse_pos_val, str_w, str_h) 
 ( 
   
   // -- center axis --------
   hlf_h = h/2;
-  axis  = y + hlf_h;
+  axis  = y + hlf_h; // Это центральная ось!
   gfx_set(0.6,0.8,0.6,0.2);
-  gfx_line(x, axis, w, axis);
+  gfx_line(x, axis, x+w, axis);
+  
   
   // -- dependent on the view_mode values --------
-  view_mode = ViewMode.val ? (    // if view_mode = 1;
-    axis1 = hlf_h - hlf_h/2;
-    axis2 = hlf_h + hlf_h/2;
+  view_mode = ViewMode.val ? (  // if view_mode = 1;
+    axis1 = y + hlf_h - hlf_h/2;    // 1 - 2, так легче считать во всех случаях
+    axis2 = y + hlf_h + hlf_h/2;
+    gfx_a-=0.05;
+    gfx_line(x, axis1, w, axis1);
+    gfx_line(x, axis2, w, axis2);
     hlf_h = hlf_h/2;
-  ) : (            // if view_mode = 0;
-    axis1 = axis2 = axis; 
+    // -- db scale -----------
+    wave.draw_db_scale(axis1, hlf_h); 
+    wave.draw_db_scale(axis2, hlf_h); 
+  ) : (                         // if view_mode = 0;
+    axis1 = axis2 = axis;
+    // -- db scale -----------
+    wave.draw_db_scale(axis, hlf_h); 
   );
-     
+  
+  
   //-- Get samples from sbuf, create peaks, draw waves -----
-  peak_x = x; // first peak x-pos
+  peak_x = 0;x; // first peak x-position
   s = 0;      // sample cnt
   last_min_peak1 = last_max_peak1 = 0; // можно еще связать крайние точки
   last_min_peak2 = last_max_peak2 = 0; // можно еще связать крайние точки
@@ -186,16 +187,16 @@ function wave.draw_waveform()
       
       // -- Draw waveforms -----------------------
       gfx_set(r1, g1, b1, a1); //-- 1 peak line --
-      gfx_line(peak_x, axis1-min_peak1, peak_x, axis1-max_peak1); // 1
+      gfx_line(x+peak_x, axis1-min_peak1, x+peak_x, axis1-max_peak1); // 1
       gfx_a += 0.3;            //-- 1 contour ----
-      gfx_line(peak_x-1, axis1-last_min_peak1, peak_x, axis1-min_peak1, 1); // 1
-      gfx_line(peak_x-1, axis1-last_max_peak1, peak_x, axis1-max_peak1, 1); // 1
+      gfx_line(x+peak_x-1, axis1-last_min_peak1, x+peak_x, axis1-min_peak1, 1); // 1
+      gfx_line(x+peak_x-1, axis1-last_max_peak1, x+peak_x, axis1-max_peak1, 1); // 1
       
       gfx_set(r2, g2, b2, a2); //-- 2 peak line --
-      gfx_line(peak_x, axis2-min_peak2, peak_x, axis2-max_peak2); // 2
+      gfx_line(x+peak_x, axis2-min_peak2, x+peak_x, axis2-max_peak2); // 2
       gfx_a += 0.3;            //-- 2 contour ----
-      gfx_line(peak_x-1, axis2-last_min_peak2, peak_x, axis2-min_peak2, 1); // 2
-      gfx_line(peak_x-1, axis2-last_max_peak2, peak_x, axis2-max_peak2, 1); // 2    
+      gfx_line(x+peak_x-1, axis2-last_min_peak2, x+peak_x, axis2-min_peak2, 1); // 2
+      gfx_line(x+peak_x-1, axis2-last_max_peak2, x+peak_x, axis2-max_peak2, 1); // 2    
     
       // -- store last peaks ---
       last_min_peak1 = min_peak1;
@@ -207,12 +208,44 @@ function wave.draw_waveform()
       peak_x+=1; // to next x
   );
 
-  //-- Draw frame ---------- 
+  //-- Draw frame if need ------------------------
   gfx_set(0.2,0.2,0.2,1);
   //gfx_rect(x-1,y,w+2,h+1,0);
-  //gfx_rect(x,y,w+1,h+1,0);
+  gfx_rect(x-1,y,w+2,h+1,0);
   //gfx_rect(x-1,y-1,w+1,h+3,0);
   
+  // -- Mouse pos val ----------------------------
+  // -- dependent on the view_mode values --------
+  this.mouseIN() ? (
+    ViewMode.val ? (  // if view_mode = 1;
+      mouse_y < axis ? (
+        mouse_pos_val = VAL2DB(abs((axis1 - mouse_y)/(hlf_h * Vzoom))); // one axis
+        chan = " (L)";
+      ) : (
+        mouse_pos_val = VAL2DB(abs((axis2 - mouse_y)/(hlf_h * Vzoom))); // one axis
+        chan = " (R)";
+      );
+    ) : (            // if view_mode = 0;
+      mouse_pos_val = VAL2DB(abs((axis - mouse_y)/(hlf_h * Vzoom))); // one axis
+      chan = " (L+R)";
+    );
+    // -------------
+    mouse_pos_val = strcat( sprintf(#, "%.2f", mouse_pos_val), " dB"); // "%.2f" - variant
+    mouse_pos_val =  strcat(mouse_pos_val, chan);
+    gfx_measurestr(mouse_pos_val, str_w, str_h); // val w, val h
+    gfx_x = x + w - 10 - str_w; gfx_y = y + 30;
+    gfx_set(0.6, 0.8, 0.6, 1);
+    gfx_drawstr(mouse_pos_val); 
+  );
+  
+  // -- Info -------------------------------------
+  gfx_set(0.6, 0.8, 0.6, 1);
+  gfx_setfont(1,"Calibri", 14);
+  gfx_x = x + 4; gfx_y = y + 4;
+  gfx_drawnumber(range_spls, 0);
+  gfx_drawstr(" samples");
+  this.Pause ? gfx_drawstr(":  Pause!"); 
+
 );
 
 
@@ -224,11 +257,7 @@ function wave.draw_waveform()
 // If x,y = 0 - draw in current position 
 function ShowMsg(x,y, msg, flag)
 (  
-  gfx_r = gfx_g = gfx_b = gfx_a = 0.9;
   x && y ? (gfx_x = x; gfx_y = y; );
-  //gfx_set(0.7, 0.7, 0.7, 1);
-  gfx_set(0.6, 0.8, 0.6, 1);
-  gfx_setfont(1,"Arial", 14);
   flag >= 0 ? gfx_drawnumber(msg, flag) : gfx_drawstr(msg);
 );
 
@@ -242,6 +271,7 @@ function LoopMode.GetRange()
    //range_start = play_position;
    //range_end = last_play_pos + last_samplesblock/srate;
    range_sec = -play_step + last_samplesblock/srate;
+   wave.spos = 0; // reset position to loop start!!!
   );
   last_play_pos = play_position;
   last_samplesblock = samplesblock;
@@ -277,7 +307,7 @@ function btn_New(x,y,w,h, r,g,b,a, lbl, sldr_idx, val, maxval)
   this.lbl = lbl;
   this.sldr_idx = sldr_idx;
   this.val = val;
-  this.minval = minval; 
+  //this.minval = minval; 
   this.maxval = maxval;
 );
 //-----------------
@@ -287,11 +317,13 @@ function btn_Draw()
 (  
   // --- get-set value -------
   this.mouseClick() ? (
-    val < maxval ? slider(sldr_idx)+=1 : slider(sldr_idx) = 0;
+    val < maxval ? slider(sldr_idx)+=1 : slider(sldr_idx) = 0; // minval = 0 
     val =  slider(sldr_idx);
     slider_automate(2 ^ (sldr_idx-1));
   );
-  //val != slider(sldr_idx) ? val = slider(sldr_idx);
+  
+  //val != slider(sldr_idx) ? val = slider(sldr_idx); // for automation vis
+  
   // --- draw ----------------
   gfx_set(r,g,b,a);
   gfx_rect(x,y,w,h,0);
@@ -308,13 +340,13 @@ function btn_Draw()
 //*******************************************************************************
 //*******************************************************************************
 // function args = (x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2, sbuf) !!!
-wave.init(1,1,960,580, 0.6,0.3,0.3,0.3, 0.3,0.6,0.3,0.3, 0);
+wave.init(x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2, 0);
 
 //------------------------------------------------------------------------------
-// function args = (x,y,w,h, r,g,b,a, lbl, sldr_idx, val, maxval)
-SyncMode.btn_New( 10,10,140,20, 0.6,0.8,0.6,0.4, "Sync Mode: ",    4, 0, 3);
-ViewMode.btn_New(160,10,120,20, 0.6,0.8,0.6,0.4, "View Mode: ",    5, 0, 1);
-ChanMode.btn_New(210,10,180,20, 0.6,0.8,0.6,0.4, "Channel Mode: ", 6, 0, 1);
+// function args = (x,y,w,h,       r,g,b,a,        lbl,         sldr_idx, val, maxval)
+SyncMode.btn_New( 10,10,140,20, 0.6,0.8,0.6,0.4, "Sync Mode: ",    4,      0,   3);
+ViewMode.btn_New(160,10,120,20, 0.6,0.8,0.6,0.4, "View Mode: ",    5,      0,   1);
+ChanMode.btn_New(210,10,180,20, 0.6,0.8,0.6,0.4, "Channel Mode: ", 6,      0,   1);
 
 
 @slider
@@ -331,7 +363,7 @@ ChanMode.val = slider6;
 // TimeLoop Mode ---------------------------------
 SyncMode.val == 0 ? (
   range_sec = LoopMode.GetRange();  
-  while(range_sec > 4.001) ( range_sec*=0.5 ); // 4.001
+  while(range_sec > max_range_sec + 0.001) ( range_sec*=0.5 ); // verify range
 
 );
 
@@ -344,7 +376,7 @@ SyncMode.val == 1 ? (
 // Test tempo-sync - range -----------------------
 SyncMode.val == 2 ? (
   range_sec = 60/tempo * 2^(slider2);
-  while(range_sec > 4.001) ( range_sec*=0.5 ); // 4.001
+  while(range_sec > max_range_sec + 0.001) ( range_sec*=0.5 ); // 4.001
 );
 
 // Free mode -------------------------------------
@@ -366,27 +398,27 @@ wave.sbuf_sz = range_spls*2;  // wave samplebuffer size(1-2 channels)
 
 @sample
 ChanMode.val ? ( 
-  // 1+2 / 3+4
+  // ChanMode  = "1+2 / 3+4"
   input1 = (spl0 + spl1) * 0.5;
   input2 = (spl2 + spl3) * 0.5;
 ) : (
-  // 1 / 2
+  // ChanMode  = "1 / 2"
   input1 = spl0;
   input2 = spl1;
 );  
 
-// 1 + 2 - Mono
-// input1 = input2 = (spl0 + spl1) * 0.5; // не используется
+// ChanMode  = "1 + 2 - Mono"  - не используется
+// input1 = input2 = (spl0 + spl1) * 0.5; 
 
 wave.SamplesToBuffer(input1, input2);
 
-@gfx 960 580
+@gfx 800 400
 
 gfx_getchar(); // request mouse_cap to be set even when mouse button not down
 
 //***************************************************************
-//-- Upd coord  ----------------------------------
-function wave.Zoom()
+//-- Zoom  ---------------------------------------
+function wave.GetMouse()
   local(K)
 (
   //-- H Zoom -----------------------
@@ -401,60 +433,63 @@ function wave.Zoom()
       mouse_cap&4 ? K = 1.01 : K = 1.1;
       mouse_wheel<0 ? slider1 *= K;
       mouse_wheel>0 ? slider1 /= K;
-      slider1 = max(min(slider1,4),0.001);
+      slider1 = max(min(slider1, max_range_sec), 0.001);
     );
   );  
   
   //-- V Zoom -----------------------
-  wave.mouseDown() ? (
+  wave.mouseDown() ? (         // Capture wave
     wave.isCaptd = 1;
     wave.cap_x = mouse_x;
     wave.cap_y = mouse_y;
     wave.Vzoom.cap_val = wave.Vzoom;
   );
   //------
-  mouse_up ? wave.isCaptd = 0;
+  mouse_up ? wave.isCaptd = 0; // reset Captd state
+  
   //------
   wave.isCaptd ? (
     wave.Vzoom = wave.Vzoom.cap_val + (mouse_down_y-mouse_y)/150;
     wave.Vzoom = min(max(wave.Vzoom,1),10 );
     slider3 = wave.Vzoom;
   );
+  //------
+  wave.mouseRClick() ? wave.Pause = !wave.Pause;
 
 );
 
-
+//-- Upd coord  ----------------------------------
 function UpdateCoord()
 (  
-  wave.w = gfx_w-wave.x-1;
-  wave.h = gfx_h-wave.y-1;
-  
-  gfx_setfont(1,"Arial", 15);
-  
-  SyncMode.x = wave.w - SyncMode.w - 4;     // upd sync x
+  wave.w = max(520, gfx_w-wave.x-10);
+  wave.h = max(160, gfx_h-wave.y-10);
+    
+  SyncMode.x = wave.x + wave.w - SyncMode.w - 4;     // upd sync x
   ViewMode.x = SyncMode.x - ViewMode.w - 4; // upd view x
   ChanMode.x = ViewMode.x - ChanMode.w - 4; // upd chan x
   
   SyncMode.y = ViewMode.y = ChanMode.y = wave.y + 4;     // upd y  
   
-  ShowMsg(wave.x + 4, wave.y + 4, range_spls, 0);
-  ShowMsg(0,0, " spl", -1);
 );
 
 //-- Draw -------------------------
 function Draw()
 ( 
   UpdateCoord();
-  wave.Zoom();
+  wave.GetMouse();
+  // -- buttons ----
   SyncMode.btn_Draw();
   ViewMode.btn_Draw();
   ChanMode.btn_Draw();
+  // -- waveform ---
   wave.draw_waveform();
 );
 
 
+//***************************************************************
+/* Можно не морочить голову с пересчетами, а просто снизить на 10-15 фпс на больших рангах!
+Все равно там фпс похеру абсолютно. Как в Рипере при записи. Пока пусть так будет.*/
 GetMouseState();
-//***************************************************************
 Draw();
-//***************************************************************
 SetMouseLastState();
+//***************************************************************
