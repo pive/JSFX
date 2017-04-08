@@ -1,3 +1,14 @@
+/* 
+   * ReaScript Name:Envelope-based Compressor
+   * EEL script for Cockos REAPER
+   * Author: EUGEN27771
+   * Author URI: http://forum.cockos.com/member.php?u=50462
+   * Co-author: IGOR
+   * Co-author URI: http://forum.cockos.com/member.php?u=106943
+   * Licence: GPL v3
+   * Version: 1.01
+*/
+
 desc:WaveScopeStereo v2
 options:no_meter
 //options:want_all_kb
