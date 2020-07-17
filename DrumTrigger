@@ -19,8 +19,12 @@ slider8:5<1,8,0.1>-Velocity Detection ms
 // -- MIDI Sliders --------
 slider9:0<0,11,1{36: C3,37: C#3,38: D3,39: Eb3,40: E3,41: F3,42: F#3,43: G3,44: G#3,45: A3,46: Bb3,47: B3,48: C3,49: C#3,50: D3,51: D#3,52: E3,53: F3,54: F#3,55: G3,56: G#3,57: A3,58: A#3,59: B3,60: C4,61: C#4,62: D4,63: D#4,64: E4,65: F4,66: F#4,67: G4,68: G#4,69: A4,70: A#4,71: B4,72: C5,73: C#5,74: D5,75: D#5,76: E5,77: F5,78: F#5,79: G5,80: G#5}>MIDI Note
 slider10:2<0,3,1{1/4, 1/8, 1/16, 1/32, 1/64}>-Note Length
-// -- other ---------------
 
+@serialize
+//------------------------------------------------
+// xx and yy are curve point values, they should be saved/restored
+file_mem(0, xx, curve_npnts);
+file_mem(0, yy, curve_npnts);
 
 @init
 //------------------------------------------------
@@ -28,6 +32,7 @@ ext_noinit = 1;
 envOut1 = 0;
 envOut2 = 0;
 retrig_cnt = 10^5;
+curve_npnts = 4;
 
 //-- GFX -----------------------------------------
 R = 20; G = 20; B = 20;
@@ -300,19 +305,19 @@ function Curve_Init(x,y,w,h, mem_offs, n_pnts)
   this.n_pnts = n_pnts;   // number of curve points
   //-- curve-points coords list ----------
   //-- xx[0]...xx[n_pnts-1] and yy[0]...yy[n_pnts-1]
-  this.xx = mem_offs;          // x-coord mem slots offs
-  this.yy = mem_offs + n_pnts; // y-coord mem slots offs
+  xx = mem_offs;          // x-coord mem slots offs
+  yy = mem_offs + n_pnts; // y-coord mem slots offs
   //-- def pnts values -------------------
   i=0;
   loop(n_pnts,
-    this.xx[i] = this.yy[i] = i/(n_pnts-1);
+    xx[i] = yy[i] = i/(n_pnts-1);
     i+=1;
   );
 );
 
 //-- Apply curve to value -------------------------
 function Curve_App_to_Val(in_val)
-  instance(xx,yy, n_pnts, out_val)
+  instance(n_pnts, out_val)
   local(x1,y1,x2,y2, i)
 (
   //-- for 0...n_pnts-1 ------
@@ -332,7 +337,7 @@ function Curve_App_to_Val(in_val)
 //------------------------------------------------
 //-- Draw Curve(main function) -------------------
 function Curve_Draw()
-  instance(x,y,w,h, xx,yy, n_pnts, cap_pnt, in_val,out_val)
+  instance(x,y,w,h, n_pnts, cap_pnt, in_val,out_val)
   local(gx0,gy0, gx1,gy1, gx2,gy2, i)
 (
     //-- origin(use "|_" view ) --
@@ -431,7 +436,7 @@ function Curve_Draw()
 //-- координаты тоже не должны пересекаться!
 //-- И координаты для прикола, нужны нормальные
 wave.Init(30,20,744,250, 1000);       // init wave  - (x,y,w,h, mem_offs)
-crv.Curve_Init(795,20,270,250, 0, 4); // init curve - (x,y,w,h, mem_offs, n_pnts)
+crv.Curve_Init(795,20,270,250, 0, curve_npnts); // init curve - (x,y,w,h, mem_offs, n_pnts)
 
 
 @slider
